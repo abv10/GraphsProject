@@ -29,7 +29,7 @@ def train(dataset="prostate", output_channels=2):
     patience = 3
     for epoch in range(num_epochs):
         model.train()
-        for batch_idx, (data, labels) in enumerate(train_loader):
+        for data, labels in train_loader:
             inputs = data.to(device)
             targets = labels.to(device)
 
@@ -43,7 +43,7 @@ def train(dataset="prostate", output_channels=2):
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for batch_idx, data in enumerate(val_loader):
+            for data, labels in val_loader:
                 inputs = data.to(device)
                 targets = labels.to(device)
 
@@ -72,4 +72,4 @@ def train(dataset="prostate", output_channels=2):
         print("Training completed")
 
 if __name__ == "__main__":
-    train(dataset="prostate", output_channels=2)
+    train(dataset="lits", output_channels=3)

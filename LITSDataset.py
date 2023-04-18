@@ -13,14 +13,14 @@ class LITSDataset(Dataset):
                 if i != val_fold:
                     with open("lits_fold_"+str(i) + ".txt","r") as f:
                         for line in f:
-                            self.mask_paths.append("LITS\\Masks\\"+str(line.strip()))
-                            self.image_paths.append("LITS\\Processed\\"+str(line.strip()))
+                            self.mask_paths.append("LITS/Masks/"+str(line.strip()))
+                            self.image_paths.append("LITS/Processed/"+str(line.strip()))
         else:
             i = val_fold
             with open("lits_fold_"+str(val_fold) + ".txt","r") as f:
                 for line in f:
-                    self.mask_paths.append("LITS\\Masks\\"+str(line.strip()))
-                    self.image_paths.append("LITS\\Processed\\"+str(line.strip()))
+                    self.mask_paths.append("LITS/Masks/"+str(line.strip()))
+                    self.image_paths.append("LITS/Processed/"+str(line.strip()))
 
     def __len__(self):
         return len(self.image_paths)

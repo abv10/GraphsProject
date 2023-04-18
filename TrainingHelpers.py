@@ -8,7 +8,7 @@ def split_into_folds(path, name):
     patients = {}
     for file in files:
         if file.startswith('p') and file.endswith('.png'):
-            patient = file[1:5]
+            patient = file[1:file.index("slice")+1]
             if patient not in patients:
                 patients[patient] = []
             patients[patient].append(file)
@@ -55,5 +55,4 @@ def create_train_validation_split(name, val_fold):
 
 
 if __name__ == "__main__":
-    train, val = create_train_validation_split("prostate",0)
-    print(len(train), len(val))
+    split_into_folds("LITS/Masks", "lits")

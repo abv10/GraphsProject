@@ -4,23 +4,23 @@ from torchvision import transforms
 from PIL import Image
 import numpy as np
 
-class ProstateDataset(Dataset):
+class LITSDataset(Dataset):
     def __init__(self, val_fold, validation=False, transform=None):
         self.image_paths = []
         self.mask_paths = []
         if not validation:
             for i in range(5):
                 if i != val_fold:
-                    with open("prostate_fold_"+str(i) + ".txt","r") as f:
+                    with open("lits_fold_"+str(i) + ".txt","r") as f:
                         for line in f:
-                            self.mask_paths.append("ProstateX\\Masks\\"+str(line.strip()))
-                            self.image_paths.append("ProstateX\\Processed\\"+str(line.strip()))
+                            self.mask_paths.append("LITS\\Masks\\"+str(line.strip()))
+                            self.image_paths.append("LITS\\Processed\\"+str(line.strip()))
         else:
             i = val_fold
-            with open("prostate_fold_"+str(val_fold) + ".txt","r") as f:
+            with open("lits_fold_"+str(val_fold) + ".txt","r") as f:
                 for line in f:
-                    self.mask_paths.append("ProstateX\\Masks\\"+str(line.strip()))
-                    self.image_paths.append("ProstateX\\Processed\\"+str(line.strip()))
+                    self.mask_paths.append("LITS\\Masks\\"+str(line.strip()))
+                    self.image_paths.append("LITS\\Processed\\"+str(line.strip()))
 
     def __len__(self):
         return len(self.image_paths)
@@ -39,8 +39,10 @@ class ProstateDataset(Dataset):
         image = np.array(image)
         image = np.transpose(image, (2, 0, 1))
         mask = np.array(mask)
-        mask = mask / 255
+        bins = np.array([0,127,155])
+        mask = np.digitize(mask, bins) -1
         mask = torch.from_numpy(mask).long()
+
         image = torch.from_numpy(image).float()
 
         return image, mask

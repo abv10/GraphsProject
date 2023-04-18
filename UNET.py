@@ -68,7 +68,6 @@ class UNet(nn.Module):
         self.conv2 = nn.Conv2d(64, out_channels, kernel_size=1)
 
     def forward(self, x):
-        print(x.shape)
         x1 = self.conv1(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)

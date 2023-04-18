@@ -34,17 +34,14 @@ def IOU(y_target, y_predict):
     '''
     length = y_predict.size(1)
     y_arg = torch.argmax(y_predict, dim=1)
-    print(y_arg.shape)
-    print(y_target.shape)
-    print(y_arg)
-    print(y_target)
     intersection = (torch.eq(y_arg, y_target) & (y_arg != 0)).sum(dim=[1, 2])
     union = torch.zeros_like(intersection)
     for l in range(1,length):
         union = union + (y_arg == l).sum(dim=[1,2])
         union = union + (y_target == l).sum(dim=[1,2])
     union = union - intersection
-    iou = intersection.float() / union.float()
+    
+    iou = intersection.float() / torch.max(union.float(),torch.ones((16,1)))
     return iou.mean().item()
 
 def evaluate(dataset, path):
@@ -74,6 +71,7 @@ def evaluate(dataset, path):
 
                 iou_sum += IOU(y_target=targets, y_predict=outputs)
                 iou_count += 1
+                print(iou_sum, iou_count)
 
     print(iou_sum/iou_count)
 

@@ -16,13 +16,16 @@ def train(dataset="prostate", output_channels=2):
 
     if dataset == "prostate":
         train_dataset = ProstateDataset(val_fold=0)
+        val_dataset = ProstateDataset(val_fold=0, validation=True)
+
     else:
         train_dataset = LITSDataset(val_fold=0)
+        val_dataset = LITSDataset(val_fold=0, validation=True)
+
 
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-
-    val_dataset = ProstateDataset(val_fold=0, validation=True)
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
+    
     num_epochs = 200
     best_val_loss = float('inf')
     early_stop = False

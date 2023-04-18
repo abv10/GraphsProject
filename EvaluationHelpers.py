@@ -34,10 +34,6 @@ def IOU(y_target, y_predict):
     '''
     length = y_predict.size(1)
     y_arg = torch.argmax(y_predict, dim=1)
-    print(y_arg.shape)
-    print(y_target.shape)
-    print(y_arg)
-    print(y_target)
     intersection = (torch.eq(y_arg, y_target) & (y_arg != 0)).sum(dim=[1, 2])
     union = torch.zeros_like(intersection)
     for l in range(1,length):
@@ -46,6 +42,21 @@ def IOU(y_target, y_predict):
     union = union - intersection
     iou = intersection.float() / union.float()
     return iou.mean().item()
+
+def DICE(y_target, y_predict):
+    '''
+    y_target = H * W
+    y_predict = H * W * C
+    '''
+    length = y_predict.size(1)
+    y_arg = torch.argmax(y_predict, dim=1)
+    intersection = (torch.eq(y_arg, y_target) & (y_arg != 0)).sum(dim=[1, 2])
+    union = torch.zeros_like(intersection)
+    for l in range(1,length):
+        union = union + (y_arg == l).sum(dim=[1,2])
+        union = union + (y_target == l).sum(dim=[1,2])
+    dice = 2 * intersection.float() / union.float()
+    return dice.mean().item()
 
 def evaluate(dataset, path):
     if dataset == "prostate":

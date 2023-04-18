@@ -5,26 +5,39 @@ from LITSDataset import LITSDataset
 from torch.utils.data import Dataset, DataLoader
 from UNET import UNet
 
-def IOU(y_target, y_predict):
+def IOU_2(y_target, y_predict):
     '''
     y_target = H * W 
     y_predict = H * W * C
     '''
-    y_arg = torch.argmax(y_predict, dim=2)
+    y_arg = torch.argmax(y_predict, dim=0)
     intersection = 0
     union = 0
 
-    for c in range(1,y_predict.size[2]): #Don't need the background
-        for row in y_arg:
-            for col in y_arg[row]:
-                yp = y_arg[row][col]
-                yt = y_target[row][col]
+    for c in range(1,y_predict.size(2)): #Don't need the background
+        for row in range(y_arg.size(0)):
+            for col in range(y_arg.size(1)):
+                yp = y_arg[row][col].item()
+                yt = y_target[row][col].item()
                 if yp == c and yt == c:
                     intersection += 1
+                    union += 1
                 elif yp == c or yt == c:
                     union += 1
-
+    
     return intersection / union
+
+def IOU(y_target, y_predict):
+    '''
+    y_target = H * W
+    y_predict = H * W * C
+    '''
+    y_arg = torch.argmax(y_predict, dim=0)
+    intersection = torch.eq(y_arg, y_target).sum(dim=[0, 1])
+    union = (y_arg != 0).sum(dim=[0,1]) + (y_target != 0).sum(dim=[0,1]) - intersection
+    iou = intersection.float() / union.float()
+    print(intersection, union)
+    return iou.mean().item()
 
 def evaluate(dataset, path):
     if dataset == "prostate":
@@ -38,19 +51,20 @@ def evaluate(dataset, path):
 
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=True)
     model.load_state_dict(torch.load(path))
+   
     model.eval()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    model.to(device)
     with torch.no_grad():
             iou_sum = 0
             iou_count = 0
-            for data, labels in val_loader:
+            for data, targets in val_loader:
                 inputs = data.to(device)
-                targets = labels.to(device)
+                
 
-                outputs = model(inputs)
+                outputs = model(inputs).cpu()
 
-                for d in range(inputs.size[1]):
+                for d in range(inputs.size(0)):
                     iou_sum += IOU(y_target=targets[d], y_predict=outputs[d])
                     iou_count += 1
 

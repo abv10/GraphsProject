@@ -79,6 +79,7 @@ def evaluate(dataset, path):
     model.to(device)
     with torch.no_grad():
             iou_sum = 0
+            dice_sum = 0
             iou_count = 0
             for data, targets in val_loader:
                 inputs = data.to(device)
@@ -87,9 +88,12 @@ def evaluate(dataset, path):
                 outputs = model(inputs).cpu()
 
                 iou_sum += IOU(y_target=targets, y_predict=outputs)
+                dice_sum += DICE(y_target=targets, y_predict=outputs)
                 iou_count += 1
 
-    print(iou_sum/iou_count)
+    print("DICE:",dice_sum/iou_count)
+    print("IOU:",iou_sum/iou_count)
+
 
 
 if __name__ == "__main__":

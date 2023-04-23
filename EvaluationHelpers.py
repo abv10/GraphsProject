@@ -46,7 +46,7 @@ def IOU(y_target, y_predict):
 
 def DICE(y_target, y_predict):
     '''
-    y_target = H * W
+    y_target = H * Ws
     y_predict = H * W * C
     '''
     length = y_predict.size(1)

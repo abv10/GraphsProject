@@ -5,7 +5,8 @@ from PIL import Image
 import numpy as np
 
 class LITSDataset(Dataset):
-    def __init__(self, val_fold, validation=False, transform=None):
+    def __init__(self, val_fold, validation=False, transform=None, size=(384,384)):
+        self.size = size
         self.image_paths = []
         self.mask_paths = []
         if not validation:
@@ -32,7 +33,7 @@ class LITSDataset(Dataset):
         image = Image.open(image_path)
         mask = Image.open(mask_path)
         image = image.convert("RGB")
-        new_size = (256,256)
+        new_size = self.size
         image = image.resize(new_size)
 
         mask = mask.resize(new_size, resample=Image.NEAREST)    

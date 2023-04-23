@@ -5,28 +5,6 @@ from LITSDataset import LITSDataset
 from torch.utils.data import Dataset, DataLoader
 from UNET import UNet
 
-def IOU_2(y_target, y_predict):
-    '''
-    y_target = H * W 
-    y_predict = H * W * C
-    '''
-    y_arg = torch.argmax(y_predict, dim=0)
-    intersection = 0
-    union = 0
-
-    for c in range(1,y_predict.size(2)): #Don't need the background
-        for row in range(y_arg.size(0)):
-            for col in range(y_arg.size(1)):
-                yp = y_arg[row][col].item()
-                yt = y_target[row][col].item()
-                if yp == c and yt == c:
-                    intersection += 1
-                    union += 1
-                elif yp == c or yt == c:
-                    union += 1
-    
-    return intersection / union
-
 def IOU(y_target, y_predict):
     '''
     y_target = H * W
@@ -43,6 +21,31 @@ def IOU(y_target, y_predict):
     
     iou = intersection.float() / torch.max(union.float(),torch.ones((16,1)))
     return iou.mean().item()
+
+def precision(y_target, y_predict):
+    '''
+    y_target = H * W
+    y_predict = H * W * C
+    '''
+    length = y_predict.size(1)
+    y_arg = torch.argmax(y_predict, dim=1)
+    true_positives = ((y_arg == y_target) & (y_target != 0)).sum(dim=[1, 2])
+    false_positives = ((y_arg != y_target) & (y_target != 0)).sum(dim=[1, 2])
+    precision = true_positives.float() / (true_positives + false_positives).float()
+    return precision.mean().item()
+
+def recall(y_target, y_predict):
+    '''
+    y_target = H * W
+    y_predict = H * W * C
+    '''
+    length = y_predict.size(1)
+    y_arg = torch.argmax(y_predict, dim=1)
+    true_positives = ((y_arg == y_target) & (y_target != 0)).sum(dim=[1, 2])
+    false_negatives = ((y_arg != y_target) & (y_arg == 0)).sum(dim=[1, 2])
+    recall = true_positives.float() / (true_positives + false_negatives).float()
+    return recall.mean().item()
+
 
 def DICE(y_target, y_predict):
     '''

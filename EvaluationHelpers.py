@@ -69,8 +69,10 @@ def evaluate(dataset, path, network="UNET"):
     if dataset == "prostate":
         val_dataset = ProstateDataset(val_fold=0, validation=True, size=(256,256))
         if network == "UNET":
+            size = (256,256)
             model = UNet(in_channels=3, out_channels=2)
         else:
+            size = (128, 128)
             model = TransUNet(img_dim=128,
                             in_channels=3,
                             out_channels=128,
@@ -79,11 +81,13 @@ def evaluate(dataset, path, network="UNET"):
                             block_num=8,
                             patch_dim=16,
                             class_num=2)
+        val_dataset = ProstateDataset(val_fold=0, validation=True, size=size)
     else:
-        val_dataset = LITSDataset(val_fold=0, validation=True, size=(128,128))
         if network == "UNET":
+            size = (256, 256)
             model = UNet(in_channels=3, out_channels=3)
         else:
+            size = (128, 128)
             model = TransUNet(img_dim=128,
                             in_channels=3,
                             out_channels=128,
@@ -92,7 +96,7 @@ def evaluate(dataset, path, network="UNET"):
                             block_num=8,
                             patch_dim=16,
                             class_num=3)
-
+        val_dataset = LITSDataset(val_fold=0, validation=True, size=size)
 
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=True)
     model.load_state_dict(torch.load(path))
@@ -129,4 +133,4 @@ if __name__ == "__main__":
     #target = torch.randint(low=0, high=3, size=(16, 256, 256))
     #predicted = torch.randn((16,3,256,256))
     #print(IOU(target, predicted))
-    evaluate("lits","best_trans_lits.pt", network="lits")
+    evaluate("lits","best_UNET_lits.pt", network="UNET")

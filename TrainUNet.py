@@ -23,13 +23,13 @@ def train(network="UNET", dataset="prostate", output_channels=2):
                             patch_dim=16,
                             class_num=output_channels)
         size = (128, 128)
+    model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     if dataset == "prostate":
         train_dataset = ProstateDataset(val_fold=0, size=size)
         val_dataset = ProstateDataset(val_fold=0, validation=True, size=size)
-
     else:
         train_dataset = LITSDataset(val_fold=0, size=size)
         val_dataset = LITSDataset(val_fold=0, validation=True,size=size)
@@ -80,7 +80,7 @@ def train(network="UNET", dataset="prostate", output_channels=2):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             epochs_without_improvement = 0
-            torch.save(model.state_dict(), f"best_{dataset}.pt")
+            torch.save(model.state_dict(), f"best_{network}_{dataset}.pt")
         else:
             epochs_without_improvement += 1
             if epochs_without_improvement >= patience:
@@ -93,4 +93,9 @@ def train(network="UNET", dataset="prostate", output_channels=2):
         print("Training completed")
 
 if __name__ == "__main__":
+    #print("UNET: Prostate")
+    #train(network="UNET", dataset="prostate", output_channels=2)
+    print("UNET: LITS")
     train(network="UNET", dataset="lits", output_channels=3)
+    #print("TRANS LITS")
+    #train(network="trans", dataset="lits", output_channels=3)

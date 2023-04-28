@@ -6,13 +6,18 @@ from torch.utils.data import Dataset, DataLoader
 from UNET import UNet
 from TransformerNet import TransUNet
 
-def IOU(y_target, y_predict):
+def IOU(y_target, y_predict, reduce=False):
     '''
     y_target = H * W
     y_predict = H * W * C
     '''
     length = y_predict.size(1)
-    y_arg = torch.argmax(y_predict, dim=1)
+    if not reduce:
+        y_arg = torch.argmax(y_predict, dim=1)
+    else:
+        y_arg = y_predict
+
+
     intersection = (torch.eq(y_arg, y_target) & (y_arg != 0)).sum(dim=[1, 2])
     union = torch.zeros_like(intersection)
     for l in range(1,length):
@@ -23,26 +28,32 @@ def IOU(y_target, y_predict):
     iou = intersection.float() / torch.max(union.float(),torch.ones((16,1)))
     return iou.mean().item()
 
-def precision(y_target, y_predict):
+def precision(y_target, y_predict, reduce=False):
     '''
     y_target = H * W
     y_predict = H * W * C
     '''
     length = y_predict.size(1)
-    y_arg = torch.argmax(y_predict, dim=1)
+    if not reduce:
+        y_arg = torch.argmax(y_predict, dim=1)
+    else:
+        y_arg = y_predict
     true_positives = ((y_arg == y_target) & (y_target != 0)).sum(dim=[1, 2])
     false_positives = ((y_arg != y_target) & (y_target == 0)).sum(dim=[1, 2])
     precision = true_positives.float() / torch.max((true_positives + false_positives).float(),torch.ones((16,1)))  
 
     return precision.mean().item()
 
-def recall(y_target, y_predict):
+def recall(y_target, y_predict, reduce=False):
     '''
     y_target = H * W
     y_predict = H * W * C
     '''
     length = y_predict.size(1)
-    y_arg = torch.argmax(y_predict, dim=1)
+    if not reduce:
+        y_arg = torch.argmax(y_predict, dim=1)
+    else:
+        y_arg = y_predict
     true_positives = ((y_arg == y_target) & (y_target != 0)).sum(dim=[1, 2])
     false_negatives = ((y_arg != y_target) & (y_target != 0)).sum(dim=[1, 2])
     recall = true_positives.float() / torch.max((true_positives + false_negatives).float(),torch.ones((16,1)))
@@ -50,13 +61,16 @@ def recall(y_target, y_predict):
     return recall.mean().item()
 
 
-def DICE(y_target, y_predict):
+def DICE(y_target, y_predict, reduce=False):
     '''
     y_target = H * Ws
     y_predict = H * W * C
     '''
     length = y_predict.size(1)
-    y_arg = torch.argmax(y_predict, dim=1)
+    if not reduce:
+        y_arg = torch.argmax(y_predict, dim=1)
+    else:
+        y_arg = y_predict
     intersection = (torch.eq(y_arg, y_target) & (y_arg != 0)).sum(dim=[1, 2])
     union = torch.zeros_like(intersection)
     for l in range(1,length):

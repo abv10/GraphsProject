@@ -8,10 +8,10 @@ import time
 import sys
 from multiprocessing import Pool, cpu_count
 
-def process_line(line, sigma, k, min_size, cutoff):
+def process_line(line, sigma, k, min_size, cutoff, dataset_path):
 
-    image = Image.open('ProstateX/Processed/' + line.strip())
-    mask = Image.open("ProstateX/Masks/" + line.strip())
+    image = Image.open(dataset_path + '/Processed/' + line.strip())
+    mask = Image.open(dataset_path + "/Masks/" + line.strip())
     image = image.convert("RGB")
     image = np.array(image)
     mask = np.array(mask) /255
@@ -19,7 +19,11 @@ def process_line(line, sigma, k, min_size, cutoff):
     segmented_image = segment(image, sigma=sigma, k=k, min_size=min_size)
     segmented_image = segmented_image.astype(np.uint8)
     segmented_image = np.dot(segmented_image[..., :3], [0.2989, 0.5870, 0.1140])
-    segmented_image = np.where(segmented_image < cutoff, 1, 0)
+    if "LITS" in dataset_path:
+        segmented_image = np.where(segmented_image < cutoff, 2,
+                np.where(segmented_image < cutoff*2, 1, 0))
+    else:
+        segmented_image = np.where(segmented_image < cutoff, 1, 0)
     total_time = time.time() - start_time
     segmented_image = segmented_image.reshape(1, segmented_image.shape[0], segmented_image.shape[1])
     mask = mask.reshape(1, mask.shape[0], mask.shape[1])
@@ -44,12 +48,14 @@ if __name__ == "__main__":
     args = sys.argv[1:]
 
     # Assign the first 4 arguments to variables
-    sigma = float(args[0])
-    k = int(args[1])
-    min_size = int(args[2])
-    cutoff = int(args[3])
+    data_set_path = args[0]
 
-    print("Sigma:", sigma, "k:",k,"min_size:", min_size, "cutoff:", cutoff)
+    sigma = float(args[1])
+    k = int(args[2])
+    min_size = int(args[3])
+    cutoff = int(args[4])
+
+    print("Dataset:", data_set_path, "Sigma:", sigma, "k:",k,"min_size:", min_size, "cutoff:", cutoff)
 
     # Define the number of processes to use (should not exceed number of CPU cores)
     num_processes = min(cpu_count(), len(lines))

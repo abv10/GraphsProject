@@ -13,13 +13,43 @@ import torch_geometric.nn as pyg_nn
 import torch_geometric as pyg
 import torch.nn.functional as F
 import torch_scatter
-from torch_geometric.utils import (
-    add_self_loops,
-    is_torch_sparse_tensor,
-    remove_self_loops,
-    softmax,
-)
+import itertools
+import pickle
+import time
 
+
+def dice_coefficient(ground_truth, prediction):
+    intersection = np.sum(ground_truth * prediction)
+    gt_sum = np.sum(ground_truth)
+    pred_sum = np.sum(prediction)
+
+    dice = (2* intersection) / (gt_sum + pred_sum + 1)
+    return dice
+
+
+def iou_coefficient(ground_truth, prediction):
+    intersection = np.sum(ground_truth * prediction)
+    union = np.sum(ground_truth) + np.sum(prediction) - intersection
+
+    iou = intersection / (union + 1)
+
+    return iou
+
+
+def recall_coefficient(ground_truth, prediction):
+    true_positive = np.sum(ground_truth * prediction)
+    false_negative = np.sum(ground_truth * (1 - prediction))
+
+    recall = true_positive / (true_positive + false_negative + 1)
+    return recall
+
+
+def precision_coefficient(ground_truth, prediction):
+    true_positive = np.sum(ground_truth * prediction)
+    false_positive = np.sum((1 - ground_truth) * prediction)
+
+    precision = true_positive / (true_positive + false_positive + 1)
+    return precision
 
 def create_superpixel_graph(superpixels):
     graph = networkx.Graph()
@@ -162,35 +192,12 @@ class TwoLayerGCN(nn.Module):
 
 
 def nx_to_pyg_data(graph):
-    x = torch.tensor([graph.nodes[node]["feature"] for node in graph.nodes], dtype=torch.float)
+    x = torch.tensor(np.stack([graph.nodes[node]["feature"] for node in graph.nodes]), dtype=torch.float)
     y = torch.tensor([graph.nodes[node]["label"] for node in graph.nodes], dtype=torch.long)
     edge_index = torch.tensor(list(graph.edges)).t().contiguous()
 
     return pyg.data.Data(x=x, edge_index=edge_index, y=y)
 
-
-def place_superpixel_into_patch(image, segments, superpixel_id, patch_width, patch_height):
-    coords = np.where(segments == superpixel_id)
-    values = ground_truth_array[coords]
-    counts = np.bincount(values)
-    y_min, y_max = np.min(coords[0]), np.max(coords[0])
-    x_min, x_max = np.min(coords[1]), np.max(coords[1])
-
-    # superpixel_content = image[y_min:y_max + 1, x_min:x_max + 1, :]
-    superpixel_height, superpixel_width = y_max - y_min + 1, x_max - x_min + 1
-    y_offset = (patch_height - superpixel_height) // 2
-    x_offset = (patch_width - superpixel_width) // 2
-    patch = np.zeros((patch_width, patch_height, 3), dtype=np.uint8)
-
-    for y, x in zip(coords[0], coords[1]):
-        patch_y, patch_x = y - y_min + y_offset, x - x_min + x_offset
-        patch[patch_y, patch_x] = image[y, x]
-    return patch, counts
-
-
-def classify_pixel(pixel):
-    red_threshold = 0
-    return 1 if pixel[0] > red_threshold else 0
 
 
 def extract_features(patches, model, device):
@@ -244,69 +251,78 @@ class SuperpixelPatchDataset(Dataset):
             patch = self.transform(patch)
 
         return patch, label
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# print("Torch version", torch.__version__)
+# print("CUDA available:", torch.cuda.is_available())
+IOU_sum = []
+DICE_sum = []
+recall_sum = []
+precision_sum = []
+time_sum = []
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model1 = CustomCNN()
+# model1.load_state_dict(torch.load("C:/Users/Sam/Documents/GitHub/GraphsProject/cnn_weights.pth"))
 model1.to(device)
 criterion = nn.CrossEntropyLoss()
 learning_rate = 3e-3
 optimizer1 = optim.Adam(model1.parameters(), lr=learning_rate)
 in_channels = 100 # Number of input features
 hidden_channels = 8  # Number of hidden units
-out_channels = 2  # Number of classes
+out_channels = 3  # Number of classes
 attention_layer = CustomAttentionLayer(in_channels)
+# attention_layer.load_state_dict(torch.load("C:/Users/Sam/Documents/GitHub/GraphsProject/att_weights.pth"))
+attention_layer.to(device)
 model2 = TwoLayerGCN(in_channels, hidden_channels, out_channels)
+# model2.load_state_dict(torch.load("C:/Users/Sam/Documents/GitHub/GraphsProject/agcn_weights.pth"))
 model2.to(device)
-optimizer2 = torch.optim.Adam(list(attention_layer.parameters()) + list(model2.parameters()), lr=0.001)
+optimizer2 = torch.optim.Adam(itertools.chain(attention_layer.parameters(), model2.parameters()), lr=0.001)
 for i in range(0, 6):
-    if i < 5:
-        file_path = "C:/Users/young/OneDrive/Documents/GitHub/GraphsProject/lits_fold_" + str(i) + ".txt"
-    else:
-        file_path = "C:/Users/young/OneDrive/Documents/GitHub/GraphsProject/lits_test.txt"
-    with open(file_path, 'r') as file:
-        # Iterate through each line in the file
-        for line in file:
-            # Remove any leading and trailing whitespace (including newline characters)
-            line = line.strip()
-            image_path = "C:/Users/young/OneDrive/Documents/GitHub/GraphsProject/LITS/Processed/" + line
-            mask_path = "C:/Users/young/OneDrive/Documents/GitHub/GraphsProject/LITS/Masks/" + line
-            image = cv2.imread(image_path)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            mask = cv2.imread(mask_path)
-            mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
-            mask_height, mask_width, _ = mask.shape
-            ground_truth_array = np.zeros((mask_height, mask_width), dtype=np.uint8)
-            for y in range(mask_height):
-                for x in range(mask_width):
-                    ground_truth_array[y, x] = classify_pixel(mask[y, x])
-            num_segments = 800
-            segments = slic(image, n_segments=num_segments, compactness=150, sigma=1)
-            graph = create_superpixel_graph(segments)
-            marked_image = mark_boundaries(image, segments)
-            # marked_mask = mark_boundaries(mask, segments)
-            all_patches = {}
-            patch_labels = {}
-            for superpixel_id in np.unique(segments):
-                patch, counts = place_superpixel_into_patch(image, segments, superpixel_id, 32, 32)
-                patch = np.array(patch, dtype=np.float32)
-                patch = np.transpose(patch, (2, 0, 1))  # Convert to PyTorch format (C, H, W)
-                # patch = torch.tensor(patch).unsqueeze(0)  # Add batch dimension
-                all_patches[superpixel_id - 1] = patch
-                patch_labels[superpixel_id - 1] = np.argmax(counts)
-            # patches_tensor = torch.stack([torch.tensor(np.transpose(patch, (2, 0, 1)), dtype=torch.float32) for patch in all_patches])
-            dataset = SuperpixelPatchDataset(all_patches, patch_labels)
-            train_size = int(len(dataset))
+    num_epochs = 1
+    for epoch in range(num_epochs):
+        print(epoch)
+        if i < 5:
+            file_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/prostate_fold_" + str(i) + ".txt"
+            data_output_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/AGCN superpixels/pros_fold_" + str(
+                i) + ".pkl"
+            mask_output_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/AGCN superpixels/pros_maskfold_" + str(
+                i) + ".pkl"
+        else:
+            file_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/prostate_test.txt"
+            data_output_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/AGCN superpixels/pros_fold_test.pkl"
+            mask_output_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/AGCN superpixels/pros_maskfold_test.pkl"
+        with open(file_path, 'r') as file, open(data_output_path, 'rb') as input, open(mask_output_path, 'rb') as maskput:
+            # Iterate through each line in the file
+            for line in file:
+                # Remove any leading and trailing whitespace (including newline characters)
+                line = line.strip()
+                image_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/ProstateX/Processed/" + line
+                mask_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/ProstateX/Masks/" + line
+                image = cv2.imread(image_path)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                mask = cv2.imread(mask_path)
+                mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
+                mask_height, mask_width, _ = mask.shape
+                num_segments = 800
+                segments = slic(image, n_segments=num_segments, compactness=150, sigma=1)
+                graph = create_superpixel_graph(segments)
+                # marked_image = mark_boundaries(image, segments)
+                # marked_mask = mark_boundaries(mask, segments)
+                all_patches = pickle.load(input)
+                patch_labels = pickle.load(maskput)
+                dataset = SuperpixelPatchDataset(all_patches, patch_labels)
+                train_size = int(len(dataset))
 
-            train_dataset = dataset
-            batch_size = 32
+                train_dataset = dataset
+                batch_size = 32
 
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            num_epochs = 20
-            random_noise_scale = 0.1
-            if (i == 0):
-                for epoch in range(num_epochs):
+                train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                random_noise_scale = 0.1
+                if i == 0:
                     model1.train()
                     for batch_idx, (data, targets) in enumerate(train_loader):
                         data = data.to(device)
+                        targets = targets.to(device)
                         optimizer1.zero_grad()
                         output = model1(data)
                         loss = criterion(output, targets)
@@ -314,23 +330,26 @@ for i in range(0, 6):
                         for param in model1.parameters():
                             param.grad.data.add_(torch.randn_like(param.grad) * random_noise_scale)
                         optimizer1.step()
-            else:
-                features = extract_features(all_patches, model1, device)
+                else:
+                    features = extract_features(all_patches, model1, device)
 
-                add_features_to_graph(graph, features)
-                add_labels_to_graph(graph, patch_labels)
+                    add_features_to_graph(graph, features)
+                    add_labels_to_graph(graph, patch_labels)
 
-                data = nx_to_pyg_data(graph)
-                node_features = torch.tensor(data.x, dtype=torch.float32)
-                normalized_laplacian = compute_normalized_laplacian(graph)
+                    data = nx_to_pyg_data(graph)
+                    targets = data.y.to(device)
+                    node_features = data.x.clone().detach()
+                    normalized_laplacian = compute_normalized_laplacian(graph)
 
-                # Training loop
-                num_epochs = 100
-                if i < 5:
-                    for epoch in range(num_epochs):
+                    # Training loop
+                    if i < 5:
+
                         model2.train()
                         # Compute the attention coefficients
-                        attention_coefficients = attention_layer(node_features, data.edge_index).detach().numpy()
+                        edge_index = data.edge_index.to(device)
+                        node_features = node_features.to(device)
+                        attention_tensor = attention_layer(node_features, edge_index).cpu()
+                        attention_coefficients = attention_tensor.detach().numpy()
                         flattened_attention_coefficients = attention_coefficients.flatten()
                         # Create the adjacency matrix using the attention coefficients
                         attention_adj_matrix = attention_coefficients_to_adj_matrix(
@@ -339,41 +358,62 @@ for i in range(0, 6):
                         # Compute the Hadamard product
                         hadamard_product = np.multiply(normalized_laplacian, attention_adj_matrix)
                         hadamard_product_tensor = torch.tensor(hadamard_product, dtype=torch.float32)
+                        hadamard_product_tensor = hadamard_product_tensor.to(device)
 
                         # Forward pass
                         output = model2(hadamard_product_tensor, node_features)
-                        loss = criterion(output, data.y)
+                        loss = criterion(output, targets)
 
                         # Backward pass
                         optimizer2.zero_grad()
                         loss.backward()
                         optimizer2.step()
                         # Print the loss for this epoch
-                        print(f"Epoch: {epoch + 1}, Loss: {loss.item()}")
-                else:
-                    model2.eval()
-                    correct = 0
-                    total = 0
-                    with torch.no_grad():
-                        attention_coefficients = attention_layer(node_features, data.edge_index).detach().numpy()
-                        flattened_attention_coefficients = attention_coefficients.flatten()
-                        # Create the adjacency matrix using the attention coefficients
-                        attention_adj_matrix = attention_coefficients_to_adj_matrix(
-                            data.edge_index, flattened_attention_coefficients, len(graph.nodes))
+                        # print(f"Epoch: {epoch + 1}, Loss: {loss.item()}")
+                    else:
+                        attention_layer.eval()
+                        model2.eval()
+                        correct = 0
+                        total = 0
+                        start_time = time.time()
+                        with torch.no_grad():
+                            edge_index = data.edge_index.to(device)
+                            node_features = node_features.to(device)
+                            attention_tensor = attention_layer(node_features, edge_index).cpu()
+                            attention_coefficients = attention_tensor.detach().numpy()
+                            flattened_attention_coefficients = attention_coefficients.flatten()
+                            # Create the adjacency matrix using the attention coefficients
+                            attention_adj_matrix = attention_coefficients_to_adj_matrix(
+                                data.edge_index, flattened_attention_coefficients, len(graph.nodes))
 
-                        # Compute the Hadamard product
-                        hadamard_product = np.multiply(normalized_laplacian, attention_adj_matrix)
-                        hadamard_product_tensor = torch.tensor(hadamard_product, dtype=torch.float32)
+                            # Compute the Hadamard product
+                            hadamard_product = np.multiply(normalized_laplacian, attention_adj_matrix)
+                            hadamard_product_tensor = torch.tensor(hadamard_product, dtype=torch.float32)
+                            hadamard_product_tensor = hadamard_product_tensor.to(device)
+                            # Forward pass
+                            output = model2(hadamard_product_tensor, node_features)
+                            total_time = time.time() - start_time
+                            _, predicted = torch.max(output.data, 1)
+                            IOU_sum.append(iou_coefficient(targets.cpu().numpy(), predicted.cpu().numpy()))
+                            DICE_sum.append(dice_coefficient(targets.cpu().numpy(), predicted.cpu().numpy()))
+                            recall_sum.append(recall_coefficient(targets.cpu().numpy(), predicted.cpu().numpy()))
+                            precision_sum.append(precision_coefficient(targets.cpu().numpy(), predicted.cpu().numpy()))
+                            time_sum.append(total_time)
 
-                        # Forward pass
-                        output = model2(hadamard_product_tensor, node_features)
-                        _, predicted = torch.max(output.data, 1)
-                        total += targets.size(0)
-                        correct += (predicted == targets).sum().item()
-
-                    accuracy = 100 * correct / total
-                    print(f"Accuracy: {accuracy}%")
-
+    if i == 0:
+        model_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/cnn_weights.pth"
+        torch.save(model1.state_dict(), model_path)
+    elif i == 4:
+        model_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/att_weights.pth"
+        torch.save(attention_layer.state_dict(), model_path)
+        model_path = "C:/Users/Sam/Documents/GitHub/GraphsProject/agcn_weights.pth"
+        torch.save(model2.state_dict(), model_path)
+    elif i == 5:
+        print("IOU", np.mean(IOU_sum))
+        print("DICE", np.mean(DICE_sum))
+        print("recall", np.mean(recall_sum))
+        print("precision", np.mean(precision_sum))
+        print("time", np.mean(time_sum))
 
 # plt.imshow(marked_image)
 # plt.show()

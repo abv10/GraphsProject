@@ -12,6 +12,8 @@ def process_line(line, sigma, k, min_size, cutoff, dataset_path):
 
     image = Image.open(dataset_path + '/Processed/' + line.strip())
     mask = Image.open(dataset_path + "/Masks/" + line.strip())
+    image.show()
+    mask.show()
     image = image.convert("RGB")
     image = np.array(image)
     mask = np.array(mask) /255
@@ -19,11 +21,16 @@ def process_line(line, sigma, k, min_size, cutoff, dataset_path):
     segmented_image = segment(image, sigma=sigma, k=k, min_size=min_size)
     segmented_image = segmented_image.astype(np.uint8)
     segmented_image = np.dot(segmented_image[..., :3], [0.2989, 0.5870, 0.1140])
+
+    Image.fromarray((segmented_image * 255).astype(np.uint8)).show()
     if "LITS" in dataset_path:
         segmented_image = np.where(segmented_image < cutoff, 2,
                 np.where(segmented_image < cutoff*2, 1, 0))
     else:
         segmented_image = np.where(segmented_image < cutoff, 1, 0)
+
+    Image.fromarray((segmented_image * 255).astype(np.uint8)).show()
+
     total_time = time.time() - start_time
     segmented_image = segmented_image.reshape(1, segmented_image.shape[0], segmented_image.shape[1])
     mask = mask.reshape(1, mask.shape[0], mask.shape[1])
@@ -32,6 +39,7 @@ def process_line(line, sigma, k, min_size, cutoff, dataset_path):
             eval.recall(y_target=torch.tensor(mask), y_predict=torch.tensor(segmented_image), reduce=True),
             eval.precision(y_target=torch.tensor(mask), y_predict=torch.tensor(segmented_image), reduce=True),
             total_time)
+
 
 if __name__ == "__main__":
 

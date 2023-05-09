@@ -48,24 +48,3 @@ class LITSDataset(Dataset):
 
         return image, mask
 
-
-
-
-#train_dataset = CustomDataset(train_file_paths, transform=transform)
-#train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-
-#val_dataset = CustomDataset(val_file_paths, transform=transform)
-#val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
-
-
-if __name__ == "__main__":
-    # Create an instance of the dataset
-    dataset = ProstateDataset(val_fold=0)
-
-    # Call __getitem__ with index 0
-    for i in range(3):
-        image, mask = dataset.__getitem__(i)
-
-    # Print the results
-        print(image.shape)  # should be (height, width, channels)
-        print(np.max(mask))   # should be (height, width)
